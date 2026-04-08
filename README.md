@@ -1,159 +1,81 @@
-# Swift App Template
+# Bibliothèque d'Endoscopes
 
-A starter template for iOS development students to build and run a Swift-backed web app — entirely in **GitHub Codespaces**, no Xcode or macOS required.
+Ce projet est une application web de gestion de la compatibilité des endoscopes, écrite entièrement en **Swift** avec le framework **Hummingbird 2** et une base de données **SQLite**. Elle tourne dans **GitHub Codespaces**, sans avoir besoin de macOS ni de Xcode.
 
-The included demo is a simple **Task List** app: a web server written in Swift that persists data with SQLite and renders an interactive UI in the browser.
-
----
-
-## 1. Using This Template
-
-1. Click the **"Use this template"** button at the top of this repository.
-2. Give your new repository a name and click **"Create repository"**.
-
-> Do **not** clone this repo directly — always start from your own copy created via the template.
+L'idée de départ est simple : permettre aux techniciens de retrouver rapidement quelle carte de connexion, quel set de connexion et quel code cycle utiliser pour un endoscope donné, selon sa marque, son modèle et sa catégorie de stérilisation (AquaTYPHOON, PlasmaTYPHOON, etc.). Les données viennent de fichiers CSV qui sont importés automatiquement au démarrage, et les cartes de connexion en PDF peuvent être ouvertes directement dans le navigateur.
 
 ---
 
-## 2. Opening in GitHub Codespaces
+## Fonctionnement général
 
-1. In **your new repository**, click the green **"Code"** button.
-2. Select the **"Codespaces"** tab and click **"Create codespace on main"**.
-3. Wait for the container to build — this pulls the Swift 6.2 Docker image and runs `swift package resolve` automatically. This takes a few minutes the first time.
+Au premier lancement, le serveur lit les fichiers CSV présents dans `Sources/App/` et les charge dans la base SQLite. Si la base est déjà remplie, cet import est ignoré pour ne pas dupliquer les données. Les PDFs placés dans le dossier `PDFs/` sont indexés automatiquement et associés à leur code de carte de connexion.
 
-Once the container is ready, VS Code opens in the browser with Swift fully configured.
+Toutes les pages HTML sont générées côté serveur en Swift — il n'y a pas de framework front-end. L'interface est disponible en français et en anglais, la langue étant mémorisée dans un cookie entre les visites.
 
 ---
 
-## 3. Build & Run
+## Lancer le projet
 
-Open the integrated terminal and run:
+Dans le terminal intégré, commencer par compiler :
 
 ```bash
 ./build.sh
 ```
 
-This resolves dependencies and compiles the project. When it finishes, start the server:
+Ce script résout les dépendances Swift et compile le tout. Ensuite, démarrer le serveur :
 
 ```bash
 ./run.sh
 ```
 
-Codespaces will detect that port **8080** is now in use and show a pop-up — click **"Open in Browser"** (or find it under the **Ports** tab). You should see the Task List app running live.
-
-> To stop the server press `Ctrl + C` in the terminal.
+Codespaces détecte automatiquement que le port **8080** est ouvert et propose de l'ouvrir dans le navigateur — il suffit de cliquer sur la notification ou d'aller dans l'onglet **Ports**. Pour arrêter le serveur, faire `Ctrl + C` dans le terminal.
 
 ---
 
-## 4. Project Structure
+## Routes exposées
 
-```
-.devcontainer/
-  devcontainer.json     # Codespaces container config (Swift 6.2, VS Code extensions, port forwarding)
-Sources/App/
-  main.swift            # Entry point — server setup and HTTP route definitions
-  Models.swift          # Data model: the TaskItem struct
-  Database.swift        # SQLite setup and all database queries
-  Views.swift           # HTML page rendering (returns pages to the browser)
-Package.swift           # Swift package definition — dependencies and build targets
-build.sh                # Helper script: resolve + compile
-run.sh                  # Helper script: start the server
-```
+L'application expose une douzaine de routes. En GET, la racine `/` affiche la liste complète des endoscopes avec la recherche et le filtre par catégorie. La route `/endoscope/:id` ouvre la fiche détaillée d'un endoscope avec son formulaire de modification, `/categories` liste toutes les catégories, `/pdfs/:filename` sert un fichier PDF, et `/lang/:code` permet de changer la langue (`fr` ou `en`).
+
+En POST, les routes `/endoscopes/add`, `/endoscope/:id/update` et `/endoscope/:id/delete` gèrent la création, la modification et la suppression d'un endoscope. Les routes `/categories/add`, `/category/:id/update` et `/category/:id/delete` font de même pour les catégories — la suppression d'une catégorie entraîne aussi la suppression de tous ses endoscopes. Enfin, `/import/csv` permet de relancer l'import CSV et de repartir d'une base vierge.
 
 ---
 
-## 5. How It Works
+## Structure du projet
 
-```
-Browser  →  HTTP Request
-             ↓
-         main.swift  (Hummingbird router matches the route)
-             ↓
-         Database.swift  (SQLite.swift reads/writes db.sqlite3)
-             ↓
-         Views.swift  (builds an HTML string from the data)
-             ↓
-         HTTP Response  →  Browser renders the page
-```
+Le code source est organisé dans `Sources/App/`. Le point d'entrée est `main.swift`, qui configure le serveur et déclare toutes les routes. `Models.swift` contient les trois structures de données — `Endoscope`, `Category` et `PdfDocument`. `Database.swift` gère le schéma SQLite, les opérations CRUD et la logique de recherche. `Views.swift` s'occupe de générer tout le HTML en Swift, dans les deux langues. `CSVImporter.swift` prend en charge la lecture des CSV et l'indexation des PDFs.
 
-| Layer | File | Technology |
-|---|---|---|
-| Web server & routing | `main.swift` | [Hummingbird 2](https://github.com/hummingbird-project/hummingbird) |
-| Data model | `Models.swift` | Swift `struct` |
-| Database | `Database.swift` | [SQLite.swift](https://github.com/stephencelis/SQLite.swift) |
-| UI / HTML | `Views.swift` | [Pico CSS](https://picocss.com) |
+Les données de compatibilité AquaTYPHOON sont dans `aqua_connection_cards.csv`, et celles pour PlasmaTYPHOON et PlasmaTYPHOON+ dans `plasma_connection_cards.csv`. Les PDFs sont dans le dossier `PDFs/` à la racine. La base de données `db.sqlite3` est créée automatiquement au premier démarrage.
 
 ---
 
-## 6. Your Assignment
+## Modèles de données
 
-Your job is to extend this template into your own app. Here are the four files you will work in and what to change:
+Un `Endoscope` regroupe neuf informations : son identifiant, la marque, le modèle, la catégorie associée, la référence du set de connexion, le numéro article PENTAX, le code cycle, le code de carte de connexion et des notes libres. Il est conforme à `Codable` et `Sendable`.
 
-### `Models.swift` — Define your data
-Replace or extend `TaskItem` with a struct that represents the data your app works with.
-```swift
-struct TaskItem: Codable, Sendable {
-    let id: Int64?
-    var title: String
-    var isCompleted: Bool
-    // Add your own fields here, e.g.:
-    // var dueDate: String
-    // var priority: Int
-}
-```
+Une `Category` est plus simple : elle a un identifiant, un nom et une description. Elle représente une ligne de produits de stérilisation comme AquaTYPHOON.
 
-### `Database.swift` — Read and write data
-Update the SQLite table columns to match your model, and add functions for any new queries your app needs (e.g. filtering, deleting, updating fields).
-
-### `Views.swift` — Change the UI
-Modify `renderIndex(items:)` to display your data the way you want. You can add new `render...()` functions for additional pages.
-
-### `main.swift` — Add routes
-Register new routes to handle new pages or actions. Follow the existing pattern:
-```swift
-router.get("/my-page") { _, _ -> HTML in
-    // fetch data, return a View
-}
-
-router.post("/my-action") { request, context -> Response in
-    // handle form submission
-}
-```
+Un `PdfDocument` permet de faire le lien entre un fichier PDF physique et les endoscopes concernés. Il stocke le nom du fichier, une clé de correspondance, une clé de document et le numéro de version.
 
 ---
 
-## 7. Key Swift Concepts in This Project
+## Recherche
 
-| Concept | Where to see it |
-|---|---|
-| `struct` | `Models.swift`, `Database.swift`, `Views.swift` |
-| `async/await` | `main.swift` — `app.runService()`, request handlers |
-| Closures | `main.swift` — route handler blocks `{ request, context in ... }` |
-| Protocol conformance | `Views.swift` — `HTML: ResponseGenerator` |
-| `throws` / `try` | `Database.swift` — all database calls |
-| Extensions | `Database.swift` — `Connection: @unchecked Sendable` |
+La barre de recherche sur la page principale est conçue pour être souple. La saisie est découpée en tokens sur tout caractère non-alphanumérique (espaces, tirets, `+`, `_`…), et chaque token est recherché indépendamment dans tous les champs : marque, modèle, numéro PENTAX, code cycle, carte de connexion, set de connexion, notes et nom de catégorie. Les résultats sont ensuite triés par pertinence selon le nombre de tokens qui correspondent. Le filtre par catégorie peut être combiné avec une recherche textuelle en même temps.
 
 ---
 
-## 8. Troubleshooting
+## Architecture
 
-**Port 8080 is already in use**
-Another process is using the port. In the terminal run:
-```bash
-lsof -i :8080
-kill <PID>
-```
-Then start the server again with `./run.sh`.
+Le flux d'une requête est assez direct. Le navigateur envoie une requête HTTP, que Hummingbird reçoit et route dans `main.swift`. Selon la route, `Database.swift` interroge ou met à jour `db.sqlite3` via SQLite.swift. `Views.swift` construit ensuite la page HTML à partir des données récupérées, et le résultat est renvoyé au navigateur. Le CSS vient de Pico CSS, chargé depuis un CDN — pas de build front-end.
 
-**`error: 'App' product not found` or build errors on first open**
-The package dependencies may not have resolved yet. Run:
-```bash
-swift package resolve
-./build.sh
-```
+---
 
-**Codespace is slow to start**
-The first build after creating a Codespace downloads the Swift Docker image (~1 GB). Subsequent starts are much faster because the image is cached.
+## Problèmes fréquents
 
-**Changes not showing in the browser**
-The server must be restarted to pick up code changes. Press `Ctrl + C`, run `./build.sh`, then `./run.sh` again.
+Si le port 8080 est déjà utilisé au démarrage, il y a probablement un ancien processus qui tourne encore. La commande `lsof -i :8080` permet de trouver son PID, et `kill <PID>` suffit à le stopper. Relancer ensuite `./run.sh`.
+
+Si la compilation échoue avec une erreur du type `'App' product not found`, c'est généralement que les dépendances n'ont pas encore été résolues. Lancer `swift package resolve` puis `./build.sh` règle le problème.
+
+Le premier build dans un nouveau Codespace peut être lent — Swift télécharge une image Docker d'environ 1 Go. Les démarrages suivants sont bien plus rapides car l'image est mise en cache.
+
+Enfin, si les modifications apportées au code ne s'affichent pas dans le navigateur, c'est normal : le serveur doit être redémarré pour les prendre en compte. Faire `Ctrl + C`, relancer `./build.sh`, puis `./run.sh`.
